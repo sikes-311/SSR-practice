@@ -1,0 +1,14 @@
+{
+  "rules": {
+    "no-debugger": "error",
+    "eqeqeq": "error",
+    "no-var": "error",
+    "prefer-const": "error"
+  },
+  "ignorePatterns": [
+    "node_modules",
+    ".next",
+    "coverage",
+    "drizzle"
+  ]
+}

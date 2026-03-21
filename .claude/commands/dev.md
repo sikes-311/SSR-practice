@@ -1,0 +1,279 @@
+# /dev - Issue 実装コマンド
+
+`/planning` で生成した計画書をもとに、BDD-first でシナリオ単位の実装・受け入れ検証までを自動化します。
+
+**使い方**: `/dev <issue番号>`  例: `/dev 42`
+
+**前提**: `docs/issues/{issue番号}/plan.md` が存在すること（`/planning <issue_url>` で生成）
+
+---
+
+## このコマンドが実行するプロセス
+
+```
+Step 1: plan.md 読み込み
+
+         ┌──────────────────────────────────────────────────────┐
+         │  Step 2: シナリオループ（SC-1 から順に1つずつ）           │
+         │                                                      │
+         │  Phase A: テストファースト                              │
+         │    e2e-agent がシナリオのテストを先行作成                │
+         │    👤 人間レビュー: テストは仕様を正しく表現しているか？    │
+         │         ↓ yes                                        │
+         │  Phase B: 実装                                        │
+         │    bff-agent + frontend-agent 並行実装                │
+         │    bff-test-agent + frontend-test-agent              │
+         │    e2e-agent がテストを実行 → Pass 確認                 │
+         │         ↓ Pass                                       │
+         │  Phase C: 実装コードレビュー                            │
+         │    👤 人間レビュー: 実装コードは問題ないか？              │
+         │         ↓ yes → 次のシナリオへ                         │
+         └──────────────────────────────────────────────────────┘
+
+Step 3: 最終受け入れ検証
+```
+
+---
+
+## Step 1: plan.md 読み込み
+
+以下のファイルを読み込み、実装に必要な情報を取得してください。
+
+```bash
+cat docs/issues/$ARGUMENTS/plan.md
+```
+
+取得する情報:
+- **機能概要・影響範囲**
+- **BDD シナリオ一覧**: シナリオID（SC-1, SC-2, ...）と Gherkin 詳細
+- **Downstream モックデータ設計**: 各シナリオが期待するモックデータ
+- **APIコントラクト**: Route Handler エンドポイント・型定義
+
+plan.md が存在しない場合は以下を出力して終了してください。
+
+```
+❌ docs/issues/$ARGUMENTS/plan.md が見つかりません。
+先に /planning <issue_url> を実行して計画書を生成してください。
+```
+
+---
+
+## Step 2: シナリオループ
+
+plan.md のシナリオIDリスト（SC-1, SC-2, ...）を先頭から **1つずつ** 処理します。
+
+```
+for each シナリオ in [SC-1, SC-2, ...]:
+  Phase A → Phase B → Phase C → 次のシナリオ
+```
+
+---
+
+### Phase A: テストファースト
+
+#### A-1. e2e-agent を起動してテストを先行作成する
+
+以下の情報を渡して e2e-agent を起動してください。
+
+```
+対象シナリオ: {シナリオID} — {シナリオ名}
+Gherkin: （plan.md から該当シナリオをそのまま引用）
+Downstream モックデータ設計: （plan.md から該当シナリオ分を引用）
+参照ファイル:
+  - docs/issues/{issue番号}/plan.md
+  - mock-server.mjs
+  - playwright.config.ts
+  - e2e/{feature}.spec.ts（既存ファイルがあれば）
+  - DEVELOPMENT_RULES.md
+指示:
+  1. e2e/features/{feature}.feature を作成・更新する（Gherkin をそのまま記載）
+  2. e2e/{feature}.spec.ts に対象シナリオのテストを追加する
+  3. この時点では実装が存在しないためテストは Fail して構わない
+  4. 作成したテストコードを SendMessage で team-lead に報告する
+```
+
+e2e-agent からテストコードの報告を受け取ったら Phase A-2 へ進みます。
+
+#### A-2. 👤 人間レビュー: テスト仕様の確認
+
+以下を提示してユーザーに確認を求めてください。
+
+```
+## Phase A: {シナリオID} テストレビュー
+
+以下の E2E テストが作成されました。
+このテストはシナリオの仕様を正しく表現しているか確認してください。
+
+### Gherkin（シナリオ定義）
+{plan.md の該当 Gherkin}
+
+### 作成した Playwright テスト
+{e2e-agent が作成したテストコード}
+
+### 確認ポイント
+- セレクター（data-testid）は仕様と合っているか？
+- アサーションの期待値は正しいか？
+- モックデータとの整合性はとれているか？
+
+テスト仕様を承認しますか？ [yes / 修正内容を記載]
+```
+
+- **yes** → Phase B へ進む
+- **修正内容あり** → e2e-agent に修正を依頼し、修正後に再度確認を求める
+
+---
+
+### Phase B: 実装
+
+#### B-1. 並行開発チームを起動する
+
+**チーム作成**:
+```
+TeamCreate({ team_name: "issue-{issue番号}-{シナリオID}", description: "Issue #{issue番号} {シナリオID} 実装チーム" })
+```
+
+**タスク作成と起動エージェント**:
+
+| タスクID | 担当エージェント | 内容 | 依存 |
+|---|---|---|---|
+| #1 | bff-agent | Route Handler 実装（対象シナリオに必要なエンドポイント・データ変換・DB・Downstream クライアント） | - |
+| #2 | frontend-agent | フロントエンド実装（対象シナリオに必要なページ・コンポーネント・フック） | - |
+| #3 | bff-test-agent | BFF ユニットテスト | #1完了後 |
+| #4 | frontend-test-agent | フロントエンド ユニットテスト | #2完了後 |
+| #5 | e2e-agent | E2E テスト実行・Pass 確認 | #1・#2完了後 |
+| #6 | code-review-agent | 内部品質レビュー | #1〜#4完了後 |
+| #7 | security-review-agent | セキュリティレビュー | #1・#2完了後 |
+
+依存関係:
+```
+TaskUpdate({ taskId: '3', addBlockedBy: ['1'] })
+TaskUpdate({ taskId: '4', addBlockedBy: ['2'] })
+TaskUpdate({ taskId: '5', addBlockedBy: ['1', '2'] })
+TaskUpdate({ taskId: '6', addBlockedBy: ['1', '2', '3', '4'] })
+TaskUpdate({ taskId: '7', addBlockedBy: ['1', '2'] })
+```
+
+各エージェントへの指示に必ず含めること:
+- 対象シナリオID と `docs/issues/{issue番号}/plan.md` への参照
+- `ARCHITECTURE.md`, `DEVELOPMENT_RULES.md` への参照
+- `src/types/{feature}.ts` への参照（型コントラクト）
+- **完了条件**: `npx tsc --noEmit` エラーなし + lint エラーなし + テスト全パス
+- **完了後**: TaskUpdate(completed) → SendMessage で team-lead に結果報告
+
+e2e-agent（#5）への指示には追加で以下を含めること:
+- Phase A で作成済みのテストファイル（`e2e/{feature}.spec.ts`）を実行すること
+- Fail した場合は原因を特定し、bff-agent / frontend-agent への修正依頼を team-lead に報告すること
+- 修正後に再実行し、Pass を確認してから完了報告すること
+
+#### B-2. e2e テスト Pass の確認
+
+e2e-agent（#5）が「対象シナリオ Pass」を報告するまで待ちます。
+
+e2e-agent が Fail を報告した場合:
+- e2e-agent の報告に従い bff-agent / frontend-agent に修正を依頼する
+- e2e-agent に再実行を依頼する
+- 修正依頼が5回を超えても Pass しない場合はユーザーに状況を報告して判断を仰ぐ
+
+全エージェント完了後、チームをシャットダウンしてください。
+
+---
+
+### Phase C: 実装コードレビュー
+
+以下をユーザーに提示して確認を求めてください。
+
+```
+## Phase C: {シナリオID} 実装コードレビュー
+
+{シナリオID}: {シナリオ名} ✅ E2E Pass しました。
+
+### 変更ファイル一覧
+{git diff --stat の出力}
+
+### ユニットテスト結果
+BFF: {N}件パス
+フロントエンド: {N}件パス
+
+### E2E テスト結果
+✅ {シナリオ名} — Pass
+
+実装コードを確認してください。
+次のシナリオ（{次のシナリオID}: {次のシナリオ名}）の Phase A に進んでよいですか？ [yes / 修正内容を記載]
+```
+
+- **yes** → 次のシナリオの Phase A へ進む
+- **修正内容あり** → 該当エージェントに修正を依頼し、修正後に再度確認を求める
+
+---
+
+## Step 3: 最終受け入れ検証
+
+全シナリオの Phase C が承認されたら実施します。
+
+### 3-1. ビルド検証
+
+```bash
+npx tsc --noEmit
+npm run build
+```
+
+### 3-2. 全ユニットテスト実行
+
+```bash
+npx vitest run --coverage
+```
+
+### 3-3. 全 E2E シナリオ一括実行
+
+```bash
+npx playwright test e2e/{feature}.spec.ts
+```
+
+全シナリオが Pass することを確認します。
+
+### 3-4. 検証レポート作成
+
+`docs/issues/{issue番号}/acceptance-report.md` に保存:
+
+```markdown
+# 受け入れ検証レポート - Issue #{issue番号}
+
+検証日時: YYYY-MM-DD
+検証者: Claude Code
+
+## E2E シナリオ検証結果
+
+| シナリオID | シナリオ名 | 結果 | 備考 |
+|---|---|---|---|
+| SC-1 | {シナリオ名} | ✅ Pass | |
+| SC-2 | {シナリオ名} | ✅ Pass | |
+
+## ユニットテストカバレッジ
+- BFF: XX%
+- フロントエンド: XX%
+
+## 総合判定
+✅ 全シナリオ Pass → Issue クローズ可能
+```
+
+### 3-5. Issue にレポートをコメント（ユーザーの承認後）
+
+ユーザーに確認を求めてから実行してください。
+
+```bash
+gh issue comment $ARGUMENTS --body "$(cat docs/issues/$ARGUMENTS/acceptance-report.md)"
+```
+
+---
+
+## 各エージェントの役割定義
+
+詳細は `.claude/agents/` 配下の各ファイルを参照してください。
+
+- [bff-agent](./../agents/bff-agent.md)
+- [frontend-agent](./../agents/frontend-agent.md)
+- [bff-test-agent](./../agents/bff-test-agent.md)
+- [frontend-test-agent](./../agents/frontend-test-agent.md)
+- [e2e-agent](./../agents/e2e-agent.md)
+- [code-review-agent](./../agents/code-review-agent.md)
+- [security-review-agent](./../agents/security-review-agent.md)

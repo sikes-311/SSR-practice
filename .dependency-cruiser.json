@@ -1,0 +1,61 @@
+{
+  "$schema": "https://raw.githubusercontent.com/sverweij/dependency-cruiser/main/src/schema/configuration.schema.json",
+  "forbidden": [
+    {
+      "name": "no-components-import-api-route",
+      "severity": "error",
+      "comment": "UI components should not import Route Handlers (BFF layer) directly. Use fetch via lib/api/ instead.",
+      "from": { "path": "^src/components" },
+      "to": { "path": "^src/app/api" }
+    },
+    {
+      "name": "no-hooks-import-api-route",
+      "severity": "error",
+      "comment": "Hooks should not import Route Handlers directly. Use lib/api/ fetch functions instead.",
+      "from": { "path": "^src/hooks" },
+      "to": { "path": "^src/app/api" }
+    },
+    {
+      "name": "no-client-import-server-db",
+      "severity": "error",
+      "comment": "Client-side code (components/hooks) must not import DB layer. DB access belongs in Route Handlers only.",
+      "from": { "path": "^src/(components|hooks)" },
+      "to": { "path": "^src/lib/db" }
+    },
+    {
+      "name": "no-client-import-downstream",
+      "severity": "error",
+      "comment": "Client-side code (components/hooks) must not import Downstream clients. Downstream access belongs in Route Handlers only.",
+      "from": { "path": "^src/(components|hooks)" },
+      "to": { "path": "^src/lib/downstream" }
+    },
+    {
+      "name": "no-client-import-session",
+      "severity": "error",
+      "comment": "Client-side code (components/hooks) must not import session. Session management belongs in Route Handlers/middleware only.",
+      "from": { "path": "^src/(components|hooks)" },
+      "to": { "path": "^src/lib/session" }
+    },
+    {
+      "name": "no-pages-import-server-lib-directly",
+      "severity": "warn",
+      "comment": "Page components should delegate server operations to Route Handlers, not call DB/Downstream directly.",
+      "from": { "path": "^src/app/((?!api/).)*page\\.tsx$" },
+      "to": { "path": "^src/lib/(db|downstream)" }
+    }
+  ],
+  "options": {
+    "doNotFollow": {
+      "path": "node_modules"
+    },
+    "tsPreCompilationDeps": true,
+    "tsConfig": {
+      "fileName": "tsconfig.json"
+    },
+    "reporterOptions": {
+      "text": {
+        "highlightFocused": true
+      }
+    }
+  }
+}
