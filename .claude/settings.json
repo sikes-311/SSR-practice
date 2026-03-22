@@ -25,6 +25,7 @@
       "Grep",
       "Bash(npm run *)",
       "Bash(npx *)",
+      "Bash(echo *)",
       "Bash(node *)",
       "Bash(cd *)",
       "Bash(git *)",
