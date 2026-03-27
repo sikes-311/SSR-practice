@@ -10,13 +10,15 @@ GitHubのIssueを分析し、設計・影響調査・タスク計画をまとめ
 ## このコマンドが実行するプロセス
 
 ```
-Step 1: Issue分析                  → 機能概要・受け入れ基準を把握
-Step 2: 設計 & APIコントラクト定義  → アーキテクチャ影響範囲・型定義・フロー図
-Step 3: BDDシナリオ定義            → Gherkin（UI仕様まで含めた具体的な記述）
-Step 4: Downstreamモックデータ設計  → シナリオごとのモックデータを決定
-Step 5: 既存機能への影響調査        → 破壊的変更リスクを洗い出す
-         ↓ ユーザー確認・承認
-Step 6: plan.md 生成               → docs/issues/{issue番号}/plan.md に保存
+Step 1:   Issue分析                  → 機能概要・受け入れ基準を把握
+Step 1.5: 仕様確認                   → 未記載・曖昧な仕様をユーザーに質問・受け入れ基準に反映
+          ↓ ユーザー回答
+Step 2:   設計 & APIコントラクト定義  → アーキテクチャ影響範囲・型定義・クラス図・フロー図
+Step 3:   BDDシナリオ定義            → Gherkin（UI仕様まで含めた具体的な記述）
+Step 4:   Downstreamモックデータ設計  → シナリオごとのモックデータを決定
+Step 5:   既存機能への影響調査        → 破壊的変更リスクを洗い出す
+          ↓ ユーザー確認・承認
+Step 6:   plan.md 生成               → docs/issues/{issue番号}/plan.md に保存
 ```
 
 ---
@@ -34,6 +36,50 @@ gh issue view $ARGUMENTS --json number,title,body,labels,assignees,milestone,com
 - **受け入れ基準 (Acceptance Criteria)**: 完了条件のリスト（BDDシナリオ候補）
 - **影響範囲**: フロントエンド / BFF Route Handler / 両方 / DB スキーマ / その他
 - **非機能要件**: パフォーマンス・セキュリティ・アクセシビリティ等
+
+---
+
+## Step 1.5: 仕様の曖昧性・未記載事項の確認
+
+受け入れ基準をもとに、実装を進めるにあたって**記載されていないこと・曖昧なこと**を洗い出し、ユーザーに確認します。
+**質問が不要な場合（受け入れ基準がすべて明確）は、このステップをスキップしてください。**
+
+### 確認観点
+
+以下の観点で受け入れ基準を分析し、質問すべき項目をリストアップしてください。
+
+| 観点 | 例 |
+|---|---|
+| **UI/UX の未定義** | エラーメッセージの文言・空状態の表示・ローディング表示の有無 |
+| **データ仕様の曖昧さ** | 表示件数の上限・ソートキーが同値の場合の優先順 |
+| **異常系の未定義** | エラー発生時の振る舞い・リトライの有無 |
+| **境界値の未定義** | 「最大〇件」「〇以上」等の境界が不明 |
+| **操作フローの欠落** | 画面遷移の起点・完了後の遷移先 |
+| **非機能要件の欠如** | パフォーマンス・アクセシビリティ要件 |
+
+### ユーザーへの質問フォーマット
+
+```
+## 仕様確認
+
+実装を進めるにあたり、以下の点が受け入れ基準に記載されていないか曖昧です。
+確認させてください。
+
+| # | 区分 | 質問 | 想定される選択肢 |
+|---|---|---|---|
+| Q1 | 未記載 | {質問内容} | A: {選択肢A} / B: {選択肢B} |
+| Q2 | 曖昧   | {質問内容} | — |
+
+回答をいただければ、BDD シナリオと受け入れ基準に反映します。
+```
+
+### 回答後の処理
+
+ユーザーの回答を受けたら以下を行ってから Step 2 に進みます。
+
+- 受け入れ基準に回答内容を追記（`plan.md` 生成時の「機能概要」セクションに反映）
+- 回答から追加が必要な BDD シナリオがあれば、Step 3 のシナリオリストに追加
+- 回答内容を `docs/issues/{issue番号}/spec-qa.md` に記録（`plan.md` 生成と同時）
 
 ---
 
@@ -64,7 +110,35 @@ export type Create{Feature}Request = { ... };
 type Downstream{Feature}Dto = { ... };
 ```
 
-### 2-3. フロー図の作成
+### 2-3. クラス図の作成
+
+型の関係性を Mermaid classDiagram で表現します。
+
+```mermaid
+classDiagram
+  class Downstream{Feature}Dto {
+    +string field
+    +number field
+  }
+  class {Feature}Response {
+    +string field
+    +number field
+  }
+  class {Feature}ListResponse {
+    +{Feature}Response[] items
+  }
+  Downstream{Feature}Dto --> {Feature}Response : BFF transform
+  {Feature}Response --* {Feature}ListResponse : aggregates
+```
+
+**ルール**:
+- BFF 内部の Downstream DTO と、フロントエンドに公開する Response 型を必ず分けて描くこと
+- 変換（transform）・集約（aggregates）・依存（uses）等の関係を矢印で明示すること
+- DB スキーマ変更がある場合は Drizzle テーブル型も含めること
+
+---
+
+### 2-4. フロー図の作成
 
 リクエストフローを Mermaid で表現します。
 
@@ -279,20 +353,27 @@ Issue URL: {url}
 ### 型定義（`src/types/{feature}.ts`）
 （型定義をそのまま記載）
 
+## クラス図
+
+\`\`\`mermaid
+classDiagram
+  %% Step 2-3 で作成したクラス図をそのまま貼り付ける
+\`\`\`
+
 ## シーケンス図
 
 ### 正常系
 
 \`\`\`mermaid
 sequenceDiagram
-  %% Step 2-3 で作成した正常系シーケンス図をそのまま貼り付ける
+  %% Step 2-4 で作成した正常系シーケンス図をそのまま貼り付ける
 \`\`\`
 
 ### 異常系
 
 \`\`\`mermaid
 sequenceDiagram
-  %% Step 2-3 で作成した異常系シーケンス図をそのまま貼り付ける
+  %% Step 2-4 で作成した異常系シーケンス図をそのまま貼り付ける
 \`\`\`
 
 ## BDD シナリオ一覧

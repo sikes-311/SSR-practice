@@ -38,6 +38,13 @@ function parseBody(req) {
 
 // ---- Mock data ----
 const mockDataA = {
+  allStocks: {
+    stocks: [
+      { symbol: "TOYOTA",   name: "トヨタ自動車",   change_percent: 1.6,  price_date: "2026-03-21" },
+      { symbol: "SONY",     name: "ソニーグループ",  change_percent: 1.4,  price_date: "2026-03-21" },
+      { symbol: "NINTENDO", name: "任天堂",          change_percent: -1.4, price_date: "2026-03-21" },
+    ],
+  },
   popularStocks: {
     stocks: [
       {
@@ -80,7 +87,13 @@ const mockDataA = {
 };
 
 const mockDataB = {
-  // Feature-specific mock data をここに追加する
+  allStocks: {
+    stocks: [
+      { symbol: "TOYOTA",   change_percent: 2.0, price_date: "2026-03-21" },
+      { symbol: "SONY",     change_percent: 2.0, price_date: "2026-03-21" },
+      { symbol: "NINTENDO", change_percent: 2.0, price_date: "2026-03-21" },
+    ],
+  },
 };
 
 // ---- Router ----
@@ -132,6 +145,13 @@ function createMockService(port, mockData, getErrorState, setErrorState) {
     if (getErrorState()) {
       res.writeHead(500);
       res.end(JSON.stringify({ error: "Internal Server Error (forced)" }));
+      return;
+    }
+
+    // GET /stocks — 全銘柄データ
+    if (req.method === "GET" && req.url === "/stocks") {
+      res.writeHead(200);
+      res.end(JSON.stringify(mockData.allStocks));
       return;
     }
 

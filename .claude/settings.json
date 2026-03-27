@@ -30,6 +30,7 @@
       "Bash(cd *)",
       "Bash(git *)",
       "Bash(cat *)",
+      "Bash(ls)",
       "Bash(ls *)",
       "Bash(mkdir *)",
       "Bash(cp *)",
