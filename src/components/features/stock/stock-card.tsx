@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { StockResponse } from '@/types/stock';
 
 type Props = {
@@ -34,6 +35,13 @@ export function StockCard({ stock }: Props) {
       <p data-testid="stock-price-date" className="mt-1 text-xs text-gray-400">
         {stock.priceDate}
       </p>
+      <Link
+        href={`/stocks/${stock.symbol}/chart`}
+        data-testid="chart-view-button"
+        className="mt-3 inline-block rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+      >
+        チャートを見る
+      </Link>
     </div>
   );
 }

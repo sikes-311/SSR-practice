@@ -8,7 +8,7 @@ vi.hoisted(() => {
   process.env.DOWNSTREAM_API_URL_B = 'https://api-b.example.com';
 });
 
-import { DownstreamError, getAllStocks, getPopularStocks } from './stock-client';
+import { DownstreamError, getAllStocks, getPopularStocks, getStockChart } from './stock-client';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -178,5 +178,149 @@ describe('getAllStocks', () => {
     // Assert
     await expect(promise).rejects.toThrow(DownstreamError);
     await expect(promise).rejects.toThrow('Downstream Service B stock error: 503');
+  });
+});
+
+describe('getStockChart', () => {
+  it('正常系: Service A・B に正しいパラメータ（from/to）を渡し、日付ごとに price を平均する', async () => {
+    // Arrange
+    const chartA = {
+      prices: [
+        { date: '2025-09-27', price: 170.0 },
+        { date: '2025-10-27', price: 173.0 },
+      ],
+    };
+    const chartB = {
+      prices: [
+        { date: '2025-09-27', price: 180.0 },
+        { date: '2025-10-27', price: 177.0 },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartA) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartB) }),
+    );
+
+    // Act
+    const result = await getStockChart('session-123', 'AAPL', '2025-03-27', '2025-09-27');
+
+    // Assert
+    expect(fetch).toHaveBeenCalledWith(
+      `${DOWNSTREAM_URL}/stocks/AAPL/chart?from=2025-03-27&to=2025-09-27`,
+      { headers: { 'X-Session-Id': 'session-123' }, cache: 'no-store' },
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      `${DOWNSTREAM_URL_B}/stocks/AAPL/chart?from=2025-03-27&to=2025-09-27`,
+      { headers: { 'X-Session-Id': 'session-123' }, cache: 'no-store' },
+    );
+    expect(result.symbol).toBe('AAPL');
+    expect(result.prices).toHaveLength(2);
+    expect(result.prices[0]).toEqual({ date: '2025-09-27', price: 175.0 });
+    expect(result.prices[1]).toEqual({ date: '2025-10-27', price: 175.0 });
+  });
+
+  it('正常系: 片方のサービスにしかないデータポイントはそのまま返す', async () => {
+    // Arrange
+    const chartA = {
+      prices: [
+        { date: '2025-09-27', price: 170.0 },
+        { date: '2025-11-27', price: 180.0 },
+      ],
+    };
+    const chartB = {
+      prices: [
+        { date: '2025-09-27', price: 180.0 },
+        { date: '2025-10-27', price: 177.0 },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartA) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartB) }),
+    );
+
+    // Act
+    const result = await getStockChart('session-123', 'AAPL', '2025-03-27', '2025-11-27');
+
+    // Assert
+    expect(result.prices).toHaveLength(3);
+    // 日付でソートされている
+    expect(result.prices[0].date).toBe('2025-09-27');
+    expect(result.prices[0].price).toBe(175.0); // 平均
+    expect(result.prices[1].date).toBe('2025-10-27');
+    expect(result.prices[1].price).toBe(177.0); // B のみ
+    expect(result.prices[2].date).toBe('2025-11-27');
+    expect(result.prices[2].price).toBe(180.0); // A のみ
+  });
+
+  it('正常系: レスポンスが日付昇順でソートされる', async () => {
+    // Arrange
+    const chartA = {
+      prices: [
+        { date: '2025-12-01', price: 200.0 },
+        { date: '2025-09-01', price: 170.0 },
+      ],
+    };
+    const chartB = {
+      prices: [
+        { date: '2025-12-01', price: 210.0 },
+        { date: '2025-09-01', price: 180.0 },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartA) })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(chartB) }),
+    );
+
+    // Act
+    const result = await getStockChart('session-123', 'AAPL', '2025-09-01', '2025-12-01');
+
+    // Assert
+    expect(result.prices[0].date).toBe('2025-09-01');
+    expect(result.prices[1].date).toBe('2025-12-01');
+  });
+
+  it('異常系: Service A がエラーを返す場合に DownstreamError がスローされる', async () => {
+    // Arrange
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: false, status: 500 })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ prices: [] }) }),
+    );
+
+    // Act
+    const promise = getStockChart('session-123', 'AAPL', '2025-03-27', '2025-09-27');
+
+    // Assert
+    await expect(promise).rejects.toThrow(DownstreamError);
+    await expect(promise).rejects.toThrow('Downstream Service A chart error: 500');
+  });
+
+  it('異常系: Service B がエラーを返す場合に DownstreamError がスローされる', async () => {
+    // Arrange
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ prices: [] }) })
+        .mockResolvedValueOnce({ ok: false, status: 503 }),
+    );
+
+    // Act
+    const promise = getStockChart('session-123', 'AAPL', '2025-03-27', '2025-09-27');
+
+    // Assert
+    await expect(promise).rejects.toThrow(DownstreamError);
+    await expect(promise).rejects.toThrow('Downstream Service B chart error: 503');
   });
 });

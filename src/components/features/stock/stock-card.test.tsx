@@ -74,4 +74,15 @@ describe('StockCard', () => {
     expect(screen.getByTestId('stock-change-percent')).toBeInTheDocument();
     expect(screen.getByTestId('stock-price-date')).toBeInTheDocument();
   });
+
+  it('正常系: chart-view-button が存在し /stocks/{symbol}/chart へのリンクになっている', () => {
+    // Arrange & Act
+    render(<StockCard stock={baseStock} />);
+
+    // Assert
+    const link = screen.getByTestId('chart-view-button');
+    expect(link).toBeInTheDocument();
+    expect(link).toHaveAttribute('href', '/stocks/AAPL/chart');
+    expect(link).toHaveTextContent('チャートを見る');
+  });
 });

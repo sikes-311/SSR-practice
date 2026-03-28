@@ -112,29 +112,64 @@ type Downstream{Feature}Dto = { ... };
 
 ### 2-3. クラス図の作成
 
-型の関係性を Mermaid classDiagram で表現します。
+以下の **2つをセットで** Mermaid classDiagram で作成します。
+
+#### ① BFF 内部（Downstream DTO → レスポンス型変換）
+
+`namespace` を使って Downstream / BFFResponse の境界を明示します。
 
 ```mermaid
 classDiagram
-  class Downstream{Feature}Dto {
-    +string field
-    +number field
+  namespace Downstream {
+    class Downstream{Feature}Dto {
+      +string field
+      +number field
+    }
   }
-  class {Feature}Response {
-    +string field
-    +number field
-  }
-  class {Feature}ListResponse {
-    +{Feature}Response[] items
+  namespace BFFResponse {
+    class {Feature}Response {
+      +string field
+      +number field
+    }
+    class {Feature}ListResponse {
+      +{Feature}Response[] items
+    }
   }
   Downstream{Feature}Dto --> {Feature}Response : BFF transform
   {Feature}Response --* {Feature}ListResponse : aggregates
 ```
 
+#### ② フロントエンド コンポーネント構成
+
+Pages / Components / Hooks の3層を `namespace` で区分します。
+各クラスには `<<Server Component>>` / `<<Client Component>>` / `<<TanStack Query>>` 等のステレオタイプを付与します。
+
+```mermaid
+classDiagram
+  namespace Pages {
+    class {Feature}Page {
+      <<Server Component>>
+    }
+  }
+  namespace Components {
+    class {Feature}Viewer {
+      <<Client Component>>
+    }
+  }
+  namespace Hooks {
+    class use{Feature} {
+      <<TanStack Query>>
+    }
+  }
+  {Feature}Page --> {Feature}Viewer : renders
+  {Feature}Viewer --> use{Feature} : uses
+```
+
 **ルール**:
+- **① と ② は必ずセットで作成すること**（片方だけ書かない）
 - BFF 内部の Downstream DTO と、フロントエンドに公開する Response 型を必ず分けて描くこと
-- 変換（transform）・集約（aggregates）・依存（uses）等の関係を矢印で明示すること
-- DB スキーマ変更がある場合は Drizzle テーブル型も含めること
+- 変換（transform）・集約（aggregates）・依存（uses）・ナビゲーション（navigates to）等の関係を矢印で明示すること
+- DB スキーマ変更がある場合は Drizzle テーブル型も ① に含めること
 
 ---
 
@@ -355,9 +390,18 @@ Issue URL: {url}
 
 ## クラス図
 
+### BFF 内部（Downstream DTO → レスポンス型変換）
+
 \`\`\`mermaid
 classDiagram
-  %% Step 2-3 で作成したクラス図をそのまま貼り付ける
+  %% Step 2-3 ① で作成した BFF 内部クラス図をそのまま貼り付ける
+\`\`\`
+
+### フロントエンド コンポーネント構成
+
+\`\`\`mermaid
+classDiagram
+  %% Step 2-3 ② で作成したフロントエンドコンポーネント図をそのまま貼り付ける
 \`\`\`
 
 ## シーケンス図

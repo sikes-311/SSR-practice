@@ -5,16 +5,23 @@ import { logger } from './index';
 
 export type RouteContext = { request_id: string };
 
-type RouteHandler = (request: NextRequest, ctx: RouteContext) => Promise<NextResponse>;
+type NextRouteContext = { params: Promise<Record<string, string | string[]>> };
+
+type RouteHandler = (
+  request: NextRequest,
+  ctx: RouteContext,
+  routeCtx?: NextRouteContext,
+) => Promise<NextResponse>;
 
 /**
  * Route Handler のログラッパー（docs/LOGGING.md §10.6）
  * - リクエスト開始・終了ログを自動出力
  * - UnauthorizedError を 401 に変換してログ出力
  * - 予期しない例外を ERROR ログ出力して 500 を返す
+ * - Next.js 動的ルートパラメータ（params）を透過する
  */
 export function withRouteHandler(handler: RouteHandler) {
-  return async (request: NextRequest): Promise<NextResponse> => {
+  return async (request: NextRequest, routeCtx?: NextRouteContext): Promise<NextResponse> => {
     const request_id = crypto.randomUUID();
     const start = Date.now();
     const method = request.method as 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -30,7 +37,7 @@ export function withRouteHandler(handler: RouteHandler) {
     });
 
     try {
-      const response = await handler(request, { request_id });
+      const response = await handler(request, { request_id }, routeCtx);
 
       logger.info({
         message: 'HTTPリクエスト完了',

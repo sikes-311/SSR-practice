@@ -96,6 +96,58 @@ const mockDataB = {
   },
 };
 
+// ---- Chart base prices ----
+const chartBasePrices = {
+  A: {
+    AAPL:     170,
+    GOOGL:    160,
+    MSFT:     400,
+    AMZN:     180,
+    NVDA:     800,
+    TOYOTA:   1900,
+    SONY:     1500,
+    NINTENDO: 5000,
+  },
+  B: {
+    AAPL:     180,
+    GOOGL:    165,
+    MSFT:     410,
+    AMZN:     195,
+    NVDA:     850,
+    TOYOTA:   2000,
+    SONY:     1600,
+    NINTENDO: 5200,
+  },
+};
+
+/**
+ * from〜to の範囲で月次データポイントを動的生成する。
+ * 各ポイントには +5〜+10/月 の増分を加算してトレンドを再現する。
+ */
+function generateMonthlyChartData(symbol, service, from, to) {
+  const basePriceMap = chartBasePrices[service];
+  const basePrice = basePriceMap[symbol] ?? 100;
+
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  const prices = [];
+
+  let current = new Date(fromDate);
+  let index = 0;
+
+  while (current <= toDate) {
+    const increment = index * (5 + (index % 2) * 5); // 5 or 10 per month
+    prices.push({
+      date: current.toISOString().slice(0, 10),
+      price: Math.round((basePrice + increment) * 100) / 100,
+    });
+    current = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, current.getUTCDate()));
+    index++;
+  }
+
+  return { prices };
+}
+
 // ---- Router ----
 function createMockService(port, mockData, getErrorState, setErrorState) {
   const server = createServer(async (req, res) => {
@@ -159,6 +211,19 @@ function createMockService(port, mockData, getErrorState, setErrorState) {
     if (req.method === "GET" && req.url === "/stocks/popular") {
       res.writeHead(200);
       res.end(JSON.stringify(mockData.popularStocks));
+      return;
+    }
+
+    // GET /stocks/:symbol/chart?from=YYYY-MM-DD&to=YYYY-MM-DD — チャートデータ
+    const chartMatch = req.url?.match(/^\/stocks\/([^/?]+)\/chart(\?.*)?$/);
+    if (req.method === "GET" && chartMatch) {
+      const symbol = chartMatch[1].toUpperCase();
+      const searchParams = new URLSearchParams(chartMatch[2]?.slice(1) ?? "");
+      const from = searchParams.get("from") ?? "2025-09-27";
+      const to = searchParams.get("to") ?? "2026-03-27";
+      const service = port === 4001 ? "A" : "B";
+      res.writeHead(200);
+      res.end(JSON.stringify(generateMonthlyChartData(symbol, service, from, to)));
       return;
     }
 

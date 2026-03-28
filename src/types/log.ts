@@ -18,7 +18,7 @@ export interface BaseLogEntry {
   'event.name': string;
   'event.category': EventCategory;
   request_id: string;
-  'trace_id'?: string;
+  trace_id?: string;
 }
 
 /** 任意フィールド（docs/LOGGING.md §3） */

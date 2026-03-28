@@ -22,3 +22,13 @@ export type StockListItemResponse = {
 export type StockListResponse = {
   stocks: StockListItemResponse[];
 };
+
+export type StockChartDataPoint = {
+  date: string; // "YYYY-MM-DD"
+  price: number;
+};
+
+export type StockChartResponse = {
+  symbol: string;
+  prices: StockChartDataPoint[];
+};
