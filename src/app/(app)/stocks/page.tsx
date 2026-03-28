@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useStockList } from '@/hooks/use-stock-list';
 import type { StockListItemResponse } from '@/types/stock';
@@ -103,7 +104,16 @@ export default function StocksPage() {
                   </div>
                 </div>
 
-                <p className="mt-2 text-xs text-gray-400">{stock.priceDate}</p>
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-xs text-gray-400">{stock.priceDate}</p>
+                  <Link
+                    href={`/stocks/${stock.symbol}/chart`}
+                    data-testid="chart-button"
+                    className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:bg-blue-700"
+                  >
+                    チャート
+                  </Link>
+                </div>
               </div>
             );
           })}

@@ -78,6 +78,53 @@ describe('StocksPage', () => {
     });
   });
 
+  describe('正常系: チャートボタン', () => {
+    it('各カードに data-testid="chart-button" が存在する', () => {
+      // Arrange
+      vi.mocked(useStockList).mockReturnValue({
+        data: { stocks: mockStocks },
+        isLoading: false,
+        isError: false,
+      } as any);
+
+      // Act
+      render(<StocksPage />);
+
+      // Assert
+      const cards = screen.getAllByTestId('stock-list-card');
+      for (const card of cards) {
+        expect(within(card).getByTestId('chart-button')).toBeInTheDocument();
+      }
+    });
+
+    it('チャートボタンのリンク先が /stocks/{symbol}/chart になっている', () => {
+      // Arrange
+      vi.mocked(useStockList).mockReturnValue({
+        data: { stocks: mockStocks },
+        isLoading: false,
+        isError: false,
+      } as any);
+
+      // Act
+      render(<StocksPage />);
+
+      // Assert
+      const cards = screen.getAllByTestId('stock-list-card');
+      expect(within(cards[0]).getByTestId('chart-button')).toHaveAttribute(
+        'href',
+        '/stocks/TOYOTA/chart',
+      );
+      expect(within(cards[1]).getByTestId('chart-button')).toHaveAttribute(
+        'href',
+        '/stocks/SONY/chart',
+      );
+      expect(within(cards[2]).getByTestId('chart-button')).toHaveAttribute(
+        'href',
+        '/stocks/NINTENDO/chart',
+      );
+    });
+  });
+
   describe('正常系: 並び替え', () => {
     it('sort-select で asc を選択すると表示順が逆になる（値下がり順）', async () => {
       // Arrange
